@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Vermittlungsservice — Formular</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root {
+    --bg: #ffffff;
+    --text: #1c1c1e;
+    --hint: #8e8e93;
+    --link: #2481cc;
+    --button: #2481cc;
+    --button-text: #ffffff;
+    --secondary-bg: #f2f2f7;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 16px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 16px;
+  }
+  h1 {
+    font-size: 18px;
+    margin: 0 0 4px;
+  }
+  p.hint {
+    color: var(--hint);
+    font-size: 13px;
+    margin: 0 0 20px;
+  }
+  .feld {
+    margin-bottom: 14px;
+  }
+  label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  label .optional {
+    font-weight: 400;
+    color: var(--hint);
+  }
+  input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #d1d1d6;
+    border-radius: 10px;
+    background: var(--secondary-bg);
+    color: var(--text);
+    font-size: 16px;
+  }
+  input:focus {
+    outline: 2px solid var(--link);
+  }
+  .fehler {
+    color: #d70015;
+    font-size: 13px;
+    margin-top: 4px;
+    display: none;
+  }
+  .fehler.zeigen { display: block; }
+  #status {
+    margin-top: 16px;
+    font-size: 14px;
+    color: var(--hint);
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+  <h1 id="titel">Formular</h1>
+  <p class="hint" id="untertitel"></p>
+  <form id="formular"></form>
+  <div id="status"></div>
+
+<script>
+  const tg = window.Telegram && window.Telegram.WebApp;
+
+  // Feld-Definitionen je Formulartyp. "pflicht" steuert clientseitige
+  // Validierung; alle Werte gehen 1:1 als JSON an scripts/telegram_commands.py
+  // (dort werden dieselben Pflichtfelder serverseitig nochmal geprüft --
+  // dieses Formular ersetzt die Prüfung nicht, macht sie nur bequemer).
+  const FORMULARE = {
+    kunde: {
+      titel: "Neuer Kunde",
+      untertitel: "Legt sofort einen aktiven Kleinanzeigen-Suchauftrag an.",
+      felder: [
+        { name: "name", label: "Kundenname (interner Ordnername)", pflicht: true, placeholder: "z.B. erika" },
+        { name: "query", label: "Suchbegriff", pflicht: true, placeholder: "z.B. schreibtisch elektrisch" },
+        { name: "plz", label: "PLZ", pflicht: true, placeholder: "z.B. 10115" },
+        { name: "radius_km", label: "Umkreis (km)", pflicht: true, placeholder: "z.B. 20", inputmode: "numeric" },
+        { name: "preis_min", label: "Preis von (€)", pflicht: true, placeholder: "z.B. 100", inputmode: "decimal" },
+        { name: "preis_max", label: "Preis bis (€)", pflicht: true, placeholder: "z.B. 250", inputmode: "decimal" },
+        { name: "max_anzeigen", label: "Max. Anzeigen pro Lauf", optionalText: "optional, Default 5", placeholder: "5", inputmode: "numeric" },
+        { name: "max_alter_tage", label: "Max. Alter der Anzeige (Tage)", optionalText: "optional, Default 7", placeholder: "7", inputmode: "numeric" },
+      ],
+    },
+    nische: {
+      titel: "Neue Nische",
+      untertitel: "Sucht nach Gesuchen in dieser Kategorie, unabhängig von einem bestehenden Kunden.",
+      felder: [
+        { name: "name", label: "Name der Nische", pflicht: true, placeholder: "z.B. iPhone/Smartphones" },
+        { name: "query", label: "Suchbegriff", pflicht: true, placeholder: "z.B. iphone" },
+        { name: "preis_min", label: "Preis von (€)", optionalText: "optional", placeholder: "0", inputmode: "decimal" },
+        { name: "preis_max", label: "Preis bis (€)", optionalText: "optional", placeholder: "0", inputmode: "decimal" },
+        { name: "ausschluss", label: "Ausschluss-Wörter (kommagetrennt)", optionalText: "optional", placeholder: "z.B. ankauf, wir kaufen" },
+      ],
+    },
+  };
+
+  const params = new URLSearchParams(location.search);
+  const typ = params.get("typ") === "nische" ? "nische" : "kunde";
+  const config = FORMULARE[typ];
+
+  document.getElementById("titel").textContent = config.titel;
+  document.getElementById("untertitel").textContent = config.untertitel;
+
+  const form = document.getElementById("formular");
+  for (const feld of config.felder) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "feld";
+
+    const label = document.createElement("label");
+    label.setAttribute("for", feld.name);
+    label.textContent = feld.label + " ";
+    if (feld.optionalText) {
+      const span = document.createElement("span");
+      span.className = "optional";
+      span.textContent = "(" + feld.optionalText + ")";
+      label.appendChild(span);
+    }
+    wrapper.appendChild(label);
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.id = feld.name;
+    input.name = feld.name;
+    if (feld.placeholder) input.placeholder = feld.placeholder;
+    if (feld.inputmode) input.inputMode = feld.inputmode;
+    wrapper.appendChild(input);
+
+    const fehler = document.createElement("div");
+    fehler.className = "fehler";
+    fehler.id = feld.name + "-fehler";
+    fehler.textContent = "Pflichtfeld";
+    wrapper.appendChild(fehler);
+
+    form.appendChild(wrapper);
+  }
+
+  function werteSammeln() {
+    const daten = { typ };
+    let gueltig = true;
+    for (const feld of config.felder) {
+      const input = document.getElementById(feld.name);
+      const fehlerEl = document.getElementById(feld.name + "-fehler");
+      const wert = input.value.trim();
+      if (feld.pflicht && !wert) {
+        fehlerEl.classList.add("zeigen");
+        gueltig = false;
+        continue;
+      }
+      fehlerEl.classList.remove("zeigen");
+      if (wert) daten[feld.name] = wert;
+    }
+    return gueltig ? daten : null;
+  }
+
+  function absenden() {
+    const daten = werteSammeln();
+    if (!daten) {
+      if (tg) tg.HapticFeedback.notificationOccurred("error");
+      document.getElementById("status").textContent = "Bitte alle Pflichtfelder ausfüllen.";
+      return;
+    }
+    document.getElementById("status").textContent = "Wird gesendet …";
+    if (tg) {
+      tg.sendData(JSON.stringify(daten));
+      setTimeout(() => tg.close(), 300);
+    } else {
+      // Fallback, falls die Seite mal außerhalb von Telegram geöffnet wird
+      // (z.B. zum Testen im normalen Browser) -- kein Absenden möglich,
+      // nur zur Kontrolle anzeigen was rausgegangen wäre.
+      document.getElementById("status").textContent =
+        "Nicht in Telegram geöffnet -- würde senden: " + JSON.stringify(daten);
+    }
+  }
+
+  if (tg) {
+    tg.ready();
+    tg.expand();
+    if (tg.themeParams) {
+      const root = document.documentElement.style;
+      if (tg.themeParams.bg_color) root.setProperty("--bg", tg.themeParams.bg_color);
+      if (tg.themeParams.text_color) root.setProperty("--text", tg.themeParams.text_color);
+      if (tg.themeParams.hint_color) root.setProperty("--hint", tg.themeParams.hint_color);
+      if (tg.themeParams.secondary_bg_color) root.setProperty("--secondary-bg", tg.themeParams.secondary_bg_color);
+      document.body.style.background = tg.themeParams.bg_color || "";
+    }
+    tg.MainButton.setText("Absenden");
+    tg.MainButton.show();
+    tg.MainButton.onClick(absenden);
+  } else {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = "Absenden (Test außerhalb Telegram)";
+    btn.style.cssText = "width:100%;padding:12px;border:none;border-radius:10px;background:var(--button);color:var(--button-text);font-size:16px;margin-top:8px;";
+    btn.onclick = absenden;
+    form.appendChild(btn);
+  }
+</script>
+</body>
+</html>
