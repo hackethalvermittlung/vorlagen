@@ -71,15 +71,66 @@
     color: var(--hint);
     text-align: center;
   }
+  #sperre {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 24px;
+    z-index: 10;
+  }
+  #sperre.versteckt { display: none; }
+  #sperre h2 { font-size: 16px; margin: 0 0 12px; }
+  #sperre-fehler {
+    color: #d70015;
+    font-size: 13px;
+    margin-top: 8px;
+    display: none;
+  }
+  #sperre-fehler.zeigen { display: block; }
 </style>
 </head>
 <body>
+  <div id="sperre">
+    <h2>Zugangscode</h2>
+    <input type="text" id="sperre-eingabe" placeholder="Code eingeben" inputmode="text" autocomplete="off">
+    <div id="sperre-fehler">Falscher Code.</div>
+  </div>
+
   <h1 id="titel">Formular</h1>
   <p class="hint" id="untertitel"></p>
   <form id="formular"></form>
   <div id="status"></div>
 
 <script>
+  // Einfache Zugangssperre -- KEIN echter Schutz (Code steht im Quelltext,
+  // fuer jeden sichtbar der die Seite inspiziert), haelt nur zufaellige
+  // Besucher fern. Der eigentliche Schutz sitzt serverseitig in
+  // scripts/telegram_commands.py (chat_id-Pruefung) -- selbst wer diesen
+  // Code umgeht, kann dem Bot dadurch nichts unterjubeln.
+  const ZUGANGSCODE = "vermittlung2026";
+  const sperre = document.getElementById("sperre");
+  const sperreEingabe = document.getElementById("sperre-eingabe");
+  const sperreFehler = document.getElementById("sperre-fehler");
+
+  if (sessionStorage.getItem("zugang_ok") === "1") {
+    sperre.classList.add("versteckt");
+  } else {
+    sperreEingabe.focus();
+    sperreEingabe.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter") return;
+      if (sperreEingabe.value === ZUGANGSCODE) {
+        sessionStorage.setItem("zugang_ok", "1");
+        sperre.classList.add("versteckt");
+      } else {
+        sperreFehler.classList.add("zeigen");
+        sperreEingabe.value = "";
+      }
+    });
+  }
+
   const tg = window.Telegram && window.Telegram.WebApp;
 
   // Feld-Definitionen je Formulartyp. "pflicht" steuert clientseitige
