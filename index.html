@@ -71,82 +71,25 @@
     color: var(--hint);
     text-align: center;
   }
-  #sperre {
-    position: fixed;
-    inset: 0;
-    background: var(--bg);
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    padding: 24px;
-    z-index: 10;
-  }
-  #sperre.versteckt { display: none; }
-  #sperre h2 { font-size: 16px; margin: 0 0 12px; }
-  #sperre-fehler {
-    color: #d70015;
-    font-size: 13px;
-    margin-top: 8px;
-    display: none;
-  }
-  #sperre-fehler.zeigen { display: block; }
 </style>
 </head>
 <body>
-  <div id="sperre">
-    <h2>Zugangscode</h2>
-    <input type="text" id="sperre-eingabe" placeholder="Code eingeben" inputmode="text" autocomplete="off">
-    <div id="sperre-fehler">Falscher Code.</div>
-  </div>
-
   <h1 id="titel">Formular</h1>
   <p class="hint" id="untertitel"></p>
   <form id="formular"></form>
   <div id="status"></div>
 
 <script>
-  // Einfache Zugangssperre -- KEIN echter Schutz (Code steht im Quelltext,
-  // fuer jeden sichtbar der die Seite inspiziert), haelt nur zufaellige
-  // Besucher fern. Der eigentliche Schutz sitzt serverseitig in
-  // scripts/telegram_commands.py (chat_id-Pruefung) -- selbst wer diesen
-  // Code umgeht, kann dem Bot dadurch nichts unterjubeln.
-  //
-  // localStorage statt sessionStorage (Fix 27.09.2026, Max' Feedback: musste
-  // den Code jedes Mal neu eingeben) -- Telegrams web_app-Button oeffnet bei
-  // jedem Tap eine NEUE WebView-Instanz und `tg.close()` beendet sie beim
-  // Absenden wieder, wodurch sessionStorage (an genau diese eine Instanz
-  // gebunden) jedes Mal zurueckgesetzt wurde. localStorage haengt am
-  // Origin, nicht an der einzelnen Instanz, und bleibt deshalb ueber
-  // mehrere Formular-Aufrufe hinweg bestehen.
-  const ZUGANGSCODE = "vermittlung2026";
-  const sperre = document.getElementById("sperre");
-  const sperreEingabe = document.getElementById("sperre-eingabe");
-  const sperreFehler = document.getElementById("sperre-fehler");
-
-  let zugangBereitsOk = false;
-  try {
-    zugangBereitsOk = localStorage.getItem("zugang_ok") === "1";
-  } catch (e) {
-    // localStorage evtl. blockiert (privater Modus o.ä.) -- dann einfach
-    // wieder nach dem Code fragen, statt die Seite kaputt zu machen.
-  }
-
-  if (zugangBereitsOk) {
-    sperre.classList.add("versteckt");
-  } else {
-    sperreEingabe.focus();
-    sperreEingabe.addEventListener("keydown", (e) => {
-      if (e.key !== "Enter") return;
-      if (sperreEingabe.value === ZUGANGSCODE) {
-        try { localStorage.setItem("zugang_ok", "1"); } catch (e) { /* siehe oben */ }
-        sperre.classList.add("versteckt");
-      } else {
-        sperreFehler.classList.add("zeigen");
-        sperreEingabe.value = "";
-      }
-    });
-  }
-
+  // Zugangscode-Sperre wieder entfernt (27.09.2026, zweite Rückmeldung von
+  // Max: musste den Code trotz localStorage-Fix immer noch bei jedem Tap
+  // neu eingeben -- Telegrams web_app-WebView setzt offenbar bei jedem
+  // Öffnen JEGLICHEN clientseitigen Speicher zurück, nicht nur
+  // sessionStorage, macht ein persistentes "einmal eingeben" also
+  // unzuverlässig). War ohnehin nie echter Schutz (Code stand im
+  // Quelltext) -- der eigentliche Schutz sitzt weiterhin serverseitig in
+  // scripts/telegram_commands.py (chat_id-Prüfung): nur Max' Chat-ID kann
+  // dem Bot über dieses Formular tatsächlich etwas anlegen lassen, egal
+  // wer die Seite selbst aufruft.
   const tg = window.Telegram && window.Telegram.WebApp;
 
   // Feld-Definitionen je Formulartyp. "pflicht" steuert clientseitige
