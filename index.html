@@ -110,19 +110,35 @@
   // Besucher fern. Der eigentliche Schutz sitzt serverseitig in
   // scripts/telegram_commands.py (chat_id-Pruefung) -- selbst wer diesen
   // Code umgeht, kann dem Bot dadurch nichts unterjubeln.
+  //
+  // localStorage statt sessionStorage (Fix 27.09.2026, Max' Feedback: musste
+  // den Code jedes Mal neu eingeben) -- Telegrams web_app-Button oeffnet bei
+  // jedem Tap eine NEUE WebView-Instanz und `tg.close()` beendet sie beim
+  // Absenden wieder, wodurch sessionStorage (an genau diese eine Instanz
+  // gebunden) jedes Mal zurueckgesetzt wurde. localStorage haengt am
+  // Origin, nicht an der einzelnen Instanz, und bleibt deshalb ueber
+  // mehrere Formular-Aufrufe hinweg bestehen.
   const ZUGANGSCODE = "vermittlung2026";
   const sperre = document.getElementById("sperre");
   const sperreEingabe = document.getElementById("sperre-eingabe");
   const sperreFehler = document.getElementById("sperre-fehler");
 
-  if (sessionStorage.getItem("zugang_ok") === "1") {
+  let zugangBereitsOk = false;
+  try {
+    zugangBereitsOk = localStorage.getItem("zugang_ok") === "1";
+  } catch (e) {
+    // localStorage evtl. blockiert (privater Modus o.ä.) -- dann einfach
+    // wieder nach dem Code fragen, statt die Seite kaputt zu machen.
+  }
+
+  if (zugangBereitsOk) {
     sperre.classList.add("versteckt");
   } else {
     sperreEingabe.focus();
     sperreEingabe.addEventListener("keydown", (e) => {
       if (e.key !== "Enter") return;
       if (sperreEingabe.value === ZUGANGSCODE) {
-        sessionStorage.setItem("zugang_ok", "1");
+        try { localStorage.setItem("zugang_ok", "1"); } catch (e) { /* siehe oben */ }
         sperre.classList.add("versteckt");
       } else {
         sperreFehler.classList.add("zeigen");
@@ -140,14 +156,14 @@
   const FORMULARE = {
     kunde: {
       titel: "Neuer Kunde",
-      untertitel: "Legt sofort einen aktiven Kleinanzeigen-Suchauftrag an.",
+      untertitel: "Ohne Suchbegriff schlägt der Bot selbst eine Kategorie mit guter Angebotslage vor -- alles Weitere ist optional und grenzt nur ein.",
       felder: [
-        { name: "name", label: "Kundenname (interner Ordnername)", pflicht: true, placeholder: "z.B. erika" },
-        { name: "query", label: "Suchbegriff", pflicht: true, placeholder: "z.B. schreibtisch elektrisch" },
-        { name: "plz", label: "PLZ", pflicht: true, placeholder: "z.B. 10115" },
-        { name: "radius_km", label: "Umkreis (km)", pflicht: true, placeholder: "z.B. 20", inputmode: "numeric" },
-        { name: "preis_min", label: "Preis von (€)", pflicht: true, placeholder: "z.B. 100", inputmode: "decimal" },
-        { name: "preis_max", label: "Preis bis (€)", pflicht: true, placeholder: "z.B. 250", inputmode: "decimal" },
+        { name: "name", label: "Kundenname (interner Ordnername)", optionalText: "optional, sonst automatisch vergeben", placeholder: "z.B. erika" },
+        { name: "query", label: "Suchbegriff", optionalText: "optional -- leer = Bot schlägt Kategorie vor", placeholder: "z.B. schreibtisch elektrisch" },
+        { name: "plz", label: "PLZ", optionalText: "optional, leer = bundesweit", placeholder: "z.B. 10115" },
+        { name: "radius_km", label: "Umkreis (km)", optionalText: "optional", placeholder: "z.B. 20", inputmode: "numeric" },
+        { name: "preis_min", label: "Preis von (€)", optionalText: "optional", placeholder: "z.B. 100", inputmode: "decimal" },
+        { name: "preis_max", label: "Preis bis (€)", optionalText: "optional", placeholder: "z.B. 250", inputmode: "decimal" },
         { name: "max_anzeigen", label: "Max. Anzeigen pro Lauf", optionalText: "optional, Default 5", placeholder: "5", inputmode: "numeric" },
         { name: "max_alter_tage", label: "Max. Alter der Anzeige (Tage)", optionalText: "optional, Default 7", placeholder: "7", inputmode: "numeric" },
       ],
