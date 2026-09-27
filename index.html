@@ -189,10 +189,26 @@
       document.getElementById("status").textContent = "Bitte alle Pflichtfelder ausfüllen.";
       return;
     }
-    document.getElementById("status").textContent = "Wird gesendet …";
     if (tg) {
       tg.sendData(JSON.stringify(daten));
-      setTimeout(() => tg.close(), 300);
+      // Klares Erfolgs-Feedback DIREKT im Formular (Fix 27.09.2026, Max'
+      // Feedback: nach dem Absenden kam keine Bestätigung, er wusste nicht,
+      // ob's angekommen ist). Ein Echtzeit-Daumen-hoch/-runter im Chat direkt
+      // nach dem Absenden würde einen zusätzlichen, sehr häufigen (~alle 5-10
+      // Min) GitHub-Actions-Lauf brauchen -- bewusst NICHT umgesetzt (Max'
+      // Entscheidung 27.09.2026), da das Repo privat ist und zusätzliche
+      // Actions-Minuten kostet (Freikontingent). Die echte 👍/👎-Reaktion im
+      // Chat kommt deshalb weiterhin erst mit dem nächsten stündlichen Lauf --
+      // hier davor schon klar ankündigen, damit "gesendet" nicht mit
+      // "verarbeitet" verwechselt wird. Haptik + längere Sichtbarkeit (statt
+      // 300ms) sorgen dafür, dass die Meldung auch wirklich gelesen wird,
+      // bevor sich das Formular schließt.
+      tg.HapticFeedback.notificationOccurred("success");
+      tg.MainButton.hide();
+      document.getElementById("status").textContent =
+        "✅ Gesendet -- wird beim nächsten stündlichen Lauf verarbeitet. " +
+        "Du bekommst dann eine Bestätigung (👍/👎) direkt im Chat.";
+      setTimeout(() => tg.close(), 2500);
     } else {
       // Fallback, falls die Seite mal außerhalb von Telegram geöffnet wird
       // (z.B. zum Testen im normalen Browser) -- kein Absenden möglich,
