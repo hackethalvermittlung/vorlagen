@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Vermittlungsservice — Formular</title>
+<title>Vermittlungsservice</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
   :root {
@@ -24,222 +24,284 @@
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     font-size: 16px;
   }
-  h1 {
-    font-size: 18px;
-    margin: 0 0 4px;
-  }
-  p.hint {
-    color: var(--hint);
-    font-size: 13px;
-    margin: 0 0 20px;
-  }
-  .feld {
-    margin-bottom: 14px;
-  }
-  label {
-    display: block;
-    font-size: 13px;
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p.hint { color: var(--hint); font-size: 13px; margin: 0 0 18px; line-height: 1.4; }
+  .kacheln { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .kachel {
+    background: var(--secondary-bg);
+    border: none;
+    border-radius: 14px;
+    padding: 16px 12px;
+    text-align: left;
+    color: var(--text);
+    font-size: 15px;
     font-weight: 600;
-    margin-bottom: 4px;
+    cursor: pointer;
+    min-height: 86px;
   }
-  label .optional {
-    font-weight: 400;
-    color: var(--hint);
+  .kachel .icon { font-size: 24px; display: block; margin-bottom: 6px; }
+  .kachel .sub { display: block; font-size: 12px; font-weight: 400; color: var(--hint); margin-top: 2px; }
+  .kachel.breit { grid-column: 1 / -1; min-height: 0; }
+  .zurueck {
+    background: none; border: none; color: var(--link);
+    font-size: 15px; padding: 0; margin-bottom: 12px; cursor: pointer;
   }
+  .feld { margin-bottom: 16px; }
+  label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+  label .optional { font-weight: 400; color: var(--hint); }
   input {
     width: 100%;
-    padding: 10px 12px;
-    border: 1px solid #d1d1d6;
+    padding: 11px 12px;
+    border: 1px solid transparent;
     border-radius: 10px;
     background: var(--secondary-bg);
     color: var(--text);
     font-size: 16px;
   }
-  input:focus {
-    outline: 2px solid var(--link);
+  input:focus { outline: 2px solid var(--link); }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    border: 1px solid var(--secondary-bg);
+    background: var(--secondary-bg);
+    color: var(--text);
+    border-radius: 999px;
+    padding: 9px 16px;
+    font-size: 15px;
+    cursor: pointer;
   }
-  .fehler {
-    color: #d70015;
-    font-size: 13px;
-    margin-top: 4px;
-    display: none;
-  }
+  .chip.aktiv { background: var(--button); color: var(--button-text); border-color: var(--button); }
+  .fehler { color: #d70015; font-size: 13px; margin-top: 4px; display: none; }
   .fehler.zeigen { display: block; }
-  #status {
-    margin-top: 16px;
-    font-size: 14px;
-    color: var(--hint);
-    text-align: center;
+  #status { margin-top: 16px; font-size: 14px; color: var(--hint); text-align: center; line-height: 1.4; }
+  .testbutton {
+    width: 100%; padding: 12px; border: none; border-radius: 10px;
+    background: var(--button); color: var(--button-text); font-size: 16px; margin-top: 8px;
   }
 </style>
 </head>
 <body>
-  <h1 id="titel">Formular</h1>
-  <p class="hint" id="untertitel"></p>
-  <form id="formular"></form>
+  <div id="app"></div>
   <div id="status"></div>
 
 <script>
-  // Zugangscode-Sperre wieder entfernt (27.09.2026, zweite Rückmeldung von
-  // Max: musste den Code trotz localStorage-Fix immer noch bei jedem Tap
-  // neu eingeben -- Telegrams web_app-WebView setzt offenbar bei jedem
-  // Öffnen JEGLICHEN clientseitigen Speicher zurück, nicht nur
-  // sessionStorage, macht ein persistentes "einmal eingeben" also
-  // unzuverlässig). War ohnehin nie echter Schutz (Code stand im
-  // Quelltext) -- der eigentliche Schutz sitzt weiterhin serverseitig in
-  // scripts/telegram_commands.py (chat_id-Prüfung): nur Max' Chat-ID kann
-  // dem Bot über dieses Formular tatsächlich etwas anlegen lassen, egal
-  // wer die Seite selbst aufruft.
+  // Mini-App des Hackethal-Vermittlungsservice-Bots (Umbau 01.10.2026: ein
+  // Menü für ALLE Bot-Funktionen statt nur zwei Formularen). Jede Aktion
+  // schickt per Telegram.WebApp.sendData() ein JSON {typ, ...felder} an den
+  // Bot; ausgewertet wird es in scripts/telegram_commands.py
+  // (parse_web_app_data) im privaten Haupt-Repo. Dort sitzt auch der
+  // eigentliche Schutz (nur Max' Chat-ID wird verarbeitet). Diese Seite
+  // enthält keine Kunden- oder Geschäftsdaten; die Nischen-Namen kommen als
+  // URL-Parameter vom Bot mit (?nischen=Name1|Name2).
   const tg = window.Telegram && window.Telegram.WebApp;
+  const params = new URLSearchParams(location.search);
+  const NISCHEN = (params.get("nischen") || "").split("|").map(s => s.trim()).filter(Boolean);
 
-  // Feld-Definitionen je Formulartyp. "pflicht" steuert clientseitige
-  // Validierung; alle Werte gehen 1:1 als JSON an scripts/telegram_commands.py
-  // (dort werden dieselben Pflichtfelder serverseitig nochmal geprüft --
-  // dieses Formular ersetzt die Prüfung nicht, macht sie nur bequemer).
-  const FORMULARE = {
-    kunde: {
-      titel: "Neuer Kunde",
-      untertitel: "Ohne Suchbegriff schlägt der Bot selbst eine Kategorie mit guter Angebotslage vor -- alles Weitere ist optional und grenzt nur ein.",
+  const AKTIONEN = {
+    leads: {
+      icon: "📱", titel: "Leads holen", sub: "Gesuche + fertiger Text",
+      hinweis: "Der Bot sucht frische, seriöse Gesuche und schickt dir pro Lead die Infos und den fertigen Text zum Kopieren. Bereits geschickte kommen nie doppelt.",
       felder: [
-        { name: "name", label: "Kundenname (interner Ordnername)", optionalText: "optional, sonst automatisch vergeben", placeholder: "z.B. erika" },
-        { name: "query", label: "Suchbegriff", optionalText: "optional -- leer = Bot schlägt Kategorie vor", placeholder: "z.B. schreibtisch elektrisch" },
-        { name: "plz", label: "PLZ", optionalText: "optional, leer = bundesweit", placeholder: "z.B. 10115" },
-        { name: "radius_km", label: "Umkreis (km)", optionalText: "optional", placeholder: "z.B. 20", inputmode: "numeric" },
-        { name: "preis_min", label: "Preis von (€)", optionalText: "optional", placeholder: "z.B. 100", inputmode: "decimal" },
-        { name: "preis_max", label: "Preis bis (€)", optionalText: "optional", placeholder: "z.B. 250", inputmode: "decimal" },
-        { name: "max_anzeigen", label: "Max. Anzeigen pro Lauf", optionalText: "optional, Default 5", placeholder: "5", inputmode: "numeric" },
-        { name: "max_alter_tage", label: "Max. Alter der Anzeige (Tage)", optionalText: "optional, Default 7", placeholder: "7", inputmode: "numeric" },
+        { name: "anzahl", label: "Wie viele?", typ: "chips", optionen: ["1", "2", "3", "4", "5"], standard: "2" },
+        { name: "nische", label: "Welche Nische?", typ: "chips", optionen: ["Alle", ...NISCHEN], standard: "Alle", leerBei: "Alle" },
+      ],
+    },
+    kunde: {
+      icon: "🆕", titel: "Neuer Kunde", sub: "Suchauftrag anlegen",
+      hinweis: "Ohne Suchbegriff schlägt der Bot selbst Kategorien vor. Alles andere ist optional und grenzt die Suche nur ein.",
+      felder: [
+        { name: "name", label: "Kundenname (intern)", optional: "sonst automatisch", placeholder: "z. B. erika" },
+        { name: "query", label: "Suchbegriff", optional: "leer = Bot schlägt vor", placeholder: "z. B. iphone 14 pro" },
+        { name: "plz", label: "PLZ", optional: "leer = bundesweit", placeholder: "z. B. 10115", inputmode: "numeric" },
+        { name: "radius_km", label: "Umkreis", typ: "chips", optionen: ["10", "25", "50", "100"], standard: "25", einheit: " km" },
+        { name: "preis_min", label: "Preis von (€)", optional: "optional", placeholder: "z. B. 100", inputmode: "decimal" },
+        { name: "preis_max", label: "Preis bis (€)", optional: "optional", placeholder: "z. B. 400", inputmode: "decimal" },
+        { name: "max_anzeigen", label: "Max. Anzeigen pro Lauf", typ: "chips", optionen: ["3", "5", "8"], standard: "5" },
+        { name: "max_alter_tage", label: "Anzeigen höchstens so alt", typ: "chips", optionen: ["3", "7", "14"], standard: "7", einheit: " Tage" },
       ],
     },
     nische: {
-      titel: "Neue Nische",
-      untertitel: "Sucht nach Gesuchen in dieser Kategorie, unabhängig von einem bestehenden Kunden.",
+      icon: "🎯", titel: "Neue Nische", sub: "Weitere Akquise-Suche",
+      hinweis: "Sucht täglich nach Gesuchen in dieser Kategorie, auch ohne bestehenden Kunden.",
       felder: [
-        { name: "name", label: "Name der Nische", pflicht: true, placeholder: "z.B. iPhone/Smartphones" },
-        { name: "query", label: "Suchbegriff", pflicht: true, placeholder: "z.B. iphone" },
-        { name: "preis_min", label: "Preis von (€)", optionalText: "optional", placeholder: "0", inputmode: "decimal" },
-        { name: "preis_max", label: "Preis bis (€)", optionalText: "optional", placeholder: "0", inputmode: "decimal" },
-        { name: "ausschluss", label: "Ausschluss-Wörter (kommagetrennt)", optionalText: "optional", placeholder: "z.B. ankauf, wir kaufen" },
+        { name: "name", label: "Name der Nische", pflicht: true, placeholder: "z. B. E-Bikes" },
+        { name: "query", label: "Suchbegriff", pflicht: true, placeholder: "z. B. e-bike" },
+        { name: "preis_min", label: "Preis von (€)", optional: "optional", placeholder: "0", inputmode: "decimal" },
+        { name: "preis_max", label: "Preis bis (€)", optional: "optional", placeholder: "0", inputmode: "decimal" },
+        { name: "ausschluss", label: "Ausschluss-Wörter", optional: "kommagetrennt", placeholder: "z. B. ankauf, defekt" },
       ],
     },
+    nische_aus: {
+      icon: "⏸️", titel: "Nische ausschalten", sub: "Suche stoppen",
+      hinweis: "Die Nische wird aus der täglichen Suche genommen.",
+      felder: NISCHEN.length
+        ? [{ name: "name", label: "Welche Nische?", typ: "chips", optionen: NISCHEN, pflicht: true }]
+        : [{ name: "name", label: "Name der Nische", pflicht: true, placeholder: "genau wie angelegt" }],
+    },
+    provision: {
+      icon: "💶", titel: "Provision eintragen", sub: "Deal abgeschlossen",
+      hinweis: "Reine Buchführung. Du bekommst eine Nummer zurück, mit der du die Provision später als bezahlt abhakst.",
+      felder: [
+        { name: "kunde", label: "Kunde", pflicht: true, placeholder: "Kundenname" },
+        { name: "betrag", label: "Betrag (€)", pflicht: true, placeholder: "z. B. 25", inputmode: "decimal" },
+        { name: "beschreibung", label: "Beschreibung", optional: "optional", placeholder: "z. B. iPhone 14 Pro" },
+      ],
+    },
+    provision_bezahlt: {
+      icon: "✔️", titel: "Provision bezahlt", sub: "Eintrag abhaken",
+      hinweis: "Die Nummer steht in der Bestätigung beim Eintragen oder in der Provisions-Übersicht.",
+      felder: [{ name: "id", label: "Nummer der Provision", pflicht: true, placeholder: "z. B. 3", inputmode: "numeric" }],
+    },
+    provisionen: {
+      icon: "📊", titel: "Provisionen anzeigen", sub: "Offene + Summe",
+      hinweis: "Der Bot schickt dir die Liste der offenen Provisionen samt Summe in den Chat.",
+      felder: [],
+    },
   };
+  const MENUE_REIHENFOLGE = ["leads", "kunde", "nische", "nische_aus", "provision", "provision_bezahlt", "provisionen"];
 
-  const params = new URLSearchParams(location.search);
-  const typ = params.get("typ") === "nische" ? "nische" : "kunde";
-  const config = FORMULARE[typ];
+  const app = document.getElementById("app");
+  const status = document.getElementById("status");
+  let aktuell = null;
+  let chipWerte = {};
 
-  document.getElementById("titel").textContent = config.titel;
-  document.getElementById("untertitel").textContent = config.untertitel;
-
-  const form = document.getElementById("formular");
-  for (const feld of config.felder) {
-    const wrapper = document.createElement("div");
-    wrapper.className = "feld";
-
-    const label = document.createElement("label");
-    label.setAttribute("for", feld.name);
-    label.textContent = feld.label + " ";
-    if (feld.optionalText) {
-      const span = document.createElement("span");
-      span.className = "optional";
-      span.textContent = "(" + feld.optionalText + ")";
-      label.appendChild(span);
+  function el(tag, attrs = {}, kinder = []) {
+    const e = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) {
+      if (k === "text") e.textContent = v;
+      else if (k === "onclick") e.onclick = v;
+      else e.setAttribute(k, v);
     }
-    wrapper.appendChild(label);
+    for (const kind of kinder) e.appendChild(kind);
+    return e;
+  }
 
-    const input = document.createElement("input");
-    input.type = "text";
-    input.id = feld.name;
-    input.name = feld.name;
-    if (feld.placeholder) input.placeholder = feld.placeholder;
-    if (feld.inputmode) input.inputMode = feld.inputmode;
-    wrapper.appendChild(input);
+  function zeigeMenue() {
+    aktuell = null;
+    status.textContent = "";
+    app.innerHTML = "";
+    app.appendChild(el("h1", { text: "Was möchtest du tun?" }));
+    app.appendChild(el("p", { class: "hint", text: "Tippen, ausfüllen, absenden. Der Bot antwortet im Chat." }));
+    const grid = el("div", { class: "kacheln" });
+    MENUE_REIHENFOLGE.forEach((typ, i) => {
+      const a = AKTIONEN[typ];
+      const k = el("button", { class: "kachel" + (i === 0 ? " breit" : ""), onclick: () => zeigeFormular(typ) }, [
+        el("span", { class: "icon", text: a.icon }),
+        document.createTextNode(a.titel),
+        el("span", { class: "sub", text: a.sub }),
+      ]);
+      grid.appendChild(k);
+    });
+    app.appendChild(grid);
+    if (tg) { tg.MainButton.hide(); tg.BackButton.hide(); }
+  }
 
-    const fehler = document.createElement("div");
-    fehler.className = "fehler";
-    fehler.id = feld.name + "-fehler";
-    fehler.textContent = "Pflichtfeld";
-    wrapper.appendChild(fehler);
+  function zeigeFormular(typ) {
+    aktuell = typ;
+    chipWerte = {};
+    status.textContent = "";
+    const a = AKTIONEN[typ];
+    app.innerHTML = "";
+    if (!tg) app.appendChild(el("button", { class: "zurueck", text: "‹ Menü", onclick: zeigeMenue }));
+    app.appendChild(el("h1", { text: a.icon + " " + a.titel }));
+    app.appendChild(el("p", { class: "hint", text: a.hinweis }));
 
-    form.appendChild(wrapper);
+    const form = el("form", { id: "formular" });
+    form.onsubmit = (e) => { e.preventDefault(); absenden(); };
+    for (const f of a.felder) {
+      const wrapper = el("div", { class: "feld" });
+      const label = el("label", { text: f.label + " " });
+      if (f.optional) label.appendChild(el("span", { class: "optional", text: "(" + f.optional + ")" }));
+      wrapper.appendChild(label);
+
+      if (f.typ === "chips") {
+        const box = el("div", { class: "chips" });
+        if (f.standard) chipWerte[f.name] = f.standard;
+        for (const opt of f.optionen) {
+          const chip = el("button", { type: "button", class: "chip" + (opt === f.standard ? " aktiv" : ""), text: opt + (f.einheit || "") });
+          chip.onclick = () => {
+            chipWerte[f.name] = opt;
+            box.querySelectorAll(".chip").forEach(c => c.classList.remove("aktiv"));
+            chip.classList.add("aktiv");
+            if (tg) tg.HapticFeedback.selectionChanged();
+          };
+          box.appendChild(chip);
+        }
+        wrapper.appendChild(box);
+      } else {
+        const input = el("input", { type: "text", id: f.name, name: f.name });
+        if (f.placeholder) input.placeholder = f.placeholder;
+        if (f.inputmode) input.inputMode = f.inputmode;
+        wrapper.appendChild(input);
+      }
+      wrapper.appendChild(el("div", { class: "fehler", id: f.name + "-fehler", text: "Bitte ausfüllen" }));
+      form.appendChild(wrapper);
+    }
+    app.appendChild(form);
+
+    if (tg) {
+      tg.BackButton.show();
+      tg.MainButton.setText(typ === "provisionen" ? "Übersicht anfordern" : "Absenden");
+      tg.MainButton.show();
+    } else {
+      form.appendChild(el("button", { type: "submit", class: "testbutton", text: "Absenden (Test außerhalb Telegram)" }));
+    }
+    window.scrollTo(0, 0);
   }
 
   function werteSammeln() {
-    const daten = { typ };
+    const a = AKTIONEN[aktuell];
+    const daten = { typ: aktuell };
     let gueltig = true;
-    for (const feld of config.felder) {
-      const input = document.getElementById(feld.name);
-      const fehlerEl = document.getElementById(feld.name + "-fehler");
-      const wert = input.value.trim();
-      if (feld.pflicht && !wert) {
-        fehlerEl.classList.add("zeigen");
-        gueltig = false;
-        continue;
-      }
+    for (const f of a.felder) {
+      let wert = f.typ === "chips" ? (chipWerte[f.name] || "") : document.getElementById(f.name).value.trim();
+      if (f.leerBei && wert === f.leerBei) wert = "";
+      const fehlerEl = document.getElementById(f.name + "-fehler");
+      if (f.pflicht && !wert) { fehlerEl.classList.add("zeigen"); gueltig = false; continue; }
       fehlerEl.classList.remove("zeigen");
-      if (wert) daten[feld.name] = wert;
+      if (wert) daten[f.name] = wert;
     }
     return gueltig ? daten : null;
   }
 
   function absenden() {
+    if (!aktuell) return;
     const daten = werteSammeln();
     if (!daten) {
       if (tg) tg.HapticFeedback.notificationOccurred("error");
-      document.getElementById("status").textContent = "Bitte alle Pflichtfelder ausfüllen.";
+      status.textContent = "Bitte die markierten Felder ausfüllen.";
       return;
     }
     if (tg) {
       tg.sendData(JSON.stringify(daten));
-      // Klares Erfolgs-Feedback DIREKT im Formular (Fix 27.09.2026, Max'
-      // Feedback: nach dem Absenden kam keine Bestätigung, er wusste nicht,
-      // ob's angekommen ist). Ein Echtzeit-Daumen-hoch/-runter im Chat direkt
-      // nach dem Absenden würde einen zusätzlichen, sehr häufigen (~alle 5-10
-      // Min) GitHub-Actions-Lauf brauchen -- bewusst NICHT umgesetzt (Max'
-      // Entscheidung 27.09.2026), da das Repo privat ist und zusätzliche
-      // Actions-Minuten kostet (Freikontingent). Die echte 👍/👎-Reaktion im
-      // Chat kommt deshalb weiterhin erst mit dem nächsten stündlichen Lauf --
-      // hier davor schon klar ankündigen, damit "gesendet" nicht mit
-      // "verarbeitet" verwechselt wird. Haptik + längere Sichtbarkeit (statt
-      // 300ms) sorgen dafür, dass die Meldung auch wirklich gelesen wird,
-      // bevor sich das Formular schließt.
+      // sendData schließt die Mini-App in Telegram ohnehin sofort. Die
+      // Antwort kommt beim nächsten Bot-Lauf in den Chat (der Bot läuft per
+      // GitHub Actions, nicht dauerhaft), deshalb ehrlich ankündigen.
       tg.HapticFeedback.notificationOccurred("success");
-      tg.MainButton.hide();
-      document.getElementById("status").textContent =
-        "✅ Gesendet -- wird beim nächsten stündlichen Lauf verarbeitet. " +
-        "Du bekommst dann eine Bestätigung (👍/👎) direkt im Chat.";
-      setTimeout(() => tg.close(), 2500);
+      status.textContent = "✅ Gesendet. Der Bot antwortet beim nächsten Lauf im Chat (meist innerhalb einer Stunde).";
     } else {
-      // Fallback, falls die Seite mal außerhalb von Telegram geöffnet wird
-      // (z.B. zum Testen im normalen Browser) -- kein Absenden möglich,
-      // nur zur Kontrolle anzeigen was rausgegangen wäre.
-      document.getElementById("status").textContent =
-        "Nicht in Telegram geöffnet -- würde senden: " + JSON.stringify(daten);
+      status.textContent = "Nicht in Telegram geöffnet. Würde senden: " + JSON.stringify(daten);
     }
   }
 
   if (tg) {
     tg.ready();
     tg.expand();
-    if (tg.themeParams) {
-      const root = document.documentElement.style;
-      if (tg.themeParams.bg_color) root.setProperty("--bg", tg.themeParams.bg_color);
-      if (tg.themeParams.text_color) root.setProperty("--text", tg.themeParams.text_color);
-      if (tg.themeParams.hint_color) root.setProperty("--hint", tg.themeParams.hint_color);
-      if (tg.themeParams.secondary_bg_color) root.setProperty("--secondary-bg", tg.themeParams.secondary_bg_color);
-      document.body.style.background = tg.themeParams.bg_color || "";
-    }
-    tg.MainButton.setText("Absenden");
-    tg.MainButton.show();
+    const t = tg.themeParams || {};
+    const root = document.documentElement.style;
+    if (t.bg_color) root.setProperty("--bg", t.bg_color);
+    if (t.text_color) root.setProperty("--text", t.text_color);
+    if (t.hint_color) root.setProperty("--hint", t.hint_color);
+    if (t.link_color) root.setProperty("--link", t.link_color);
+    if (t.button_color) root.setProperty("--button", t.button_color);
+    if (t.button_text_color) root.setProperty("--button-text", t.button_text_color);
+    if (t.secondary_bg_color) root.setProperty("--secondary-bg", t.secondary_bg_color);
+    document.body.style.background = t.bg_color || "";
     tg.MainButton.onClick(absenden);
-  } else {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.textContent = "Absenden (Test außerhalb Telegram)";
-    btn.style.cssText = "width:100%;padding:12px;border:none;border-radius:10px;background:var(--button);color:var(--button-text);font-size:16px;margin-top:8px;";
-    btn.onclick = absenden;
-    form.appendChild(btn);
+    tg.BackButton.onClick(zeigeMenue);
   }
+
+  const start = params.get("typ");
+  if (start && AKTIONEN[start]) zeigeFormular(start); else zeigeMenue();
 </script>
 </body>
 </html>
