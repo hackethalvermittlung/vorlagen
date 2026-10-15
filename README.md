@@ -11,11 +11,11 @@ Muss public sein, damit GitHub Pages es auf dem kostenlosen Plan
 Schreibzugriff bleibt trotzdem nur beim Owner/den Collaboratorn.
 
 - `index.html` — Menü mit allen Bot-Funktionen (seit 01.10.2026): Leads
-  holen (Anzahl + Nische), Neuer Kunde, Neue Nische, Nische ausschalten,
+  holen (Anzahl + Nische), Morgen-Leads an/aus, Neuer Kunde, Neue Nische, Nische ausschalten,
   Provision eintragen / bezahlt / anzeigen. Der Bot hängt die aktuellen
   Nischen-Namen als `?nischen=Name1|Name2` an.
 - `index.html?typ=kunde` — direkt das Formular "Neuer Kunde"
-- `index.html?typ=<aktion>` — direkt eine andere Aktion (leads, nische,
+- `index.html?typ=<aktion>` — direkt eine andere Aktion (leads, leads_schalter, nische,
   nische_aus, provision, provision_bezahlt, provisionen)
 
 Sendet die ausgefüllten Werte per `Telegram.WebApp.sendData()` zurück an
