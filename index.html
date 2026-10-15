@@ -105,6 +105,11 @@
         { name: "nische", label: "Welche Nische?", typ: "chips", optionen: ["Alle", ...NISCHEN], standard: "Alle", leerBei: "Alle" },
       ],
     },
+    leads_schalter: {
+      icon: "🌅", titel: "Morgen-Leads an/aus", sub: "Automatischen Digest schalten",
+      hinweis: "Der Bot schickt dir den aktuellen Status (AN/AUS) mit einem Button zum Umschalten in den Chat. Gilt nur für die automatischen Morgen-Leads, \"Leads holen\" geht immer.",
+      felder: [],
+    },
     kunde: {
       icon: "🆕", titel: "Neuer Kunde", sub: "Suchauftrag anlegen",
       hinweis: "Ohne Suchbegriff schlägt der Bot selbst Kategorien vor. Alles andere ist optional und grenzt die Suche nur ein.",
@@ -157,7 +162,7 @@
       felder: [],
     },
   };
-  const MENUE_REIHENFOLGE = ["leads", "kunde", "nische", "nische_aus", "provision", "provision_bezahlt", "provisionen"];
+  const MENUE_REIHENFOLGE = ["leads", "leads_schalter", "kunde", "nische", "nische_aus", "provision", "provision_bezahlt", "provisionen"];
 
   const app = document.getElementById("app");
   const status = document.getElementById("status");
@@ -240,7 +245,7 @@
 
     if (tg) {
       tg.BackButton.show();
-      tg.MainButton.setText(typ === "provisionen" ? "Übersicht anfordern" : "Absenden");
+      tg.MainButton.setText(typ === "provisionen" ? "Übersicht anfordern" : typ === "leads_schalter" ? "Status öffnen" : "Absenden");
       tg.MainButton.show();
     } else {
       form.appendChild(el("button", { type: "submit", class: "testbutton", text: "Absenden (Test außerhalb Telegram)" }));
